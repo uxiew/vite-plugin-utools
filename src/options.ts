@@ -2,8 +2,8 @@ import type MagicString from 'magic-string';
 import { normalizePath } from 'vite';
 import { basename, dirname, isAbsolute, resolve, resolve as resolvePath } from 'node:path';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { cwd, Data, isObject, isUndef } from './helper';
-import { loadPkg, validatePluginJson } from './utils';
+import { cwd, Data, isObject, isUndef } from './utils';
+import { loadPkg, validatePluginJson } from './prepare';
 
 export interface PreloadOptions {
   watch?: boolean;

@@ -10,8 +10,6 @@
     "preview": "vite preview"
   },
   "devDependencies": {
-    "@ver5/vite-plugin-utools": "^0.2.0",
-    "rollup": "^3.18.0",
     "typescript": "^4.6.4",
     "vite": "^4.1.4"
   },

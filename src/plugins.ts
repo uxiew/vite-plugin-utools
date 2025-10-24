@@ -1,3 +1,4 @@
+import path from 'node:path';
 import { build as viteBuild, Plugin, ResolvedConfig } from 'vite';
 
 import buildUpxs from './buildUpxs';
@@ -5,9 +6,9 @@ import { PRELOAD_FILENAME, SSR_MODE, UTOOLS_BUILD_MODE, UTOOLS_PRELOAD } from '.
 import {
   getLocalUrl,
   isUndef,
-} from './helper';
+} from './utils';
 import { OptionsResolver, RequiredOptions } from './options';
-import { writeUpxsFiles, getDistPath, copyUpxsFiles } from './prepare';
+import { writeUpxsFiles, getDistPath, copyUpxsFiles, getUtoolsPath } from './prepare';
 import { buildPreload } from './preload_handler';
 
 let localUrl = ''
@@ -40,14 +41,20 @@ export const devPlugin = (options: RequiredOptions): Plugin => {
       // build preload.js 
       buildPreload(options)
     },
-    handleHotUpdate({ file, server }) {
-      console.log(file)
-      if (file.includes(getDistPath(server.config, 'plugin.json'))) {
-        OptionsResolver.refreshUpxsJSON(options.configFile)
-        writeUpxsFiles(server.config, localUrl)
-        copyUpxsFiles(server.config)
-      }
-    },
+    configureServer(server) {
+      const pluginJsonPath = path.resolve(getUtoolsPath(), 'plugin.json');
+      // server.
+      let lastUpdateTime = 0;
+      server.watcher.on('change', (file) => {
+        if (file === pluginJsonPath && Date.now() - lastUpdateTime > 500) {
+          lastUpdateTime = Date.now();
+          console.log('[file changed]', path.basename(file))
+          OptionsResolver.refreshUpxsJSON(options.configFile)
+          writeUpxsFiles(server.config, localUrl)
+          copyUpxsFiles(server.config)
+        }
+      })
+    }
   };
 };
 
@@ -85,7 +92,7 @@ export const buildUpxsPlugin = (options: RequiredOptions): Plugin => {
     closeBundle: async () => {
       if (config.mode === UTOOLS_PRELOAD && config.isProduction) {
         writeUpxsFiles(config, localUrl)
-        if (!options.configFile || !options.upx) return;
+        if (!options.configFile || !options.upxs) return;
         await buildUpxs(config.build.outDir, options, config.logger);
       }
     },

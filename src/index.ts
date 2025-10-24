@@ -52,6 +52,4 @@ export {
   applyMockOverrides
 } from './mockHelpers';
 
-// Export Mock file manager
-export { MockFileManager } from './mockFileManager';
 export type { MockManifest, PreloadSignature } from './types';

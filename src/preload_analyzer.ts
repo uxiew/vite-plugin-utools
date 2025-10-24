@@ -346,7 +346,7 @@ function transformSourceToMock(sourceCode: string, sourceFileName: string): stri
         return (sourceFile) => ts.visitEachChild(sourceFile, visit, context);
 
         // 3. 实现 `visit` 函数，这是变换的核心
-        function visit(node: ts.Node): ts.VisitResult<ts.Node> {
+        function visit(node: ts.Node): ts.VisitResult<ts.Node> | undefined {
             // **规则 1: 移除所有顶层 import 语句**
             if (ts.isImportDeclaration(node)) {
                 return undefined; // 返回 undefined 会从 AST 中移除该节点
@@ -454,4 +454,154 @@ function transformSourceToMock(sourceCode: string, sourceFileName: string): stri
     const transformationResult = ts.transform(sourceFile, [transformerFactory]);
     const transformedSourceFile = transformationResult.transformed[0];
     return printer.printFile(transformedSourceFile);
+}
+
+
+/**
+ * 移除 CommonJS 导出语句
+ * @param code 原始代码
+ * @param fileName 文件名
+ * @returns 移除 CommonJS 导出后的代码
+ */
+export function removeCommonJSExports1(code: string, fileName: string) {
+    const sourceFile = ts.createSourceFile(fileName, code, ts.ScriptTarget.ESNext, true)
+
+    function isCJSExport(node: ts.Statement): boolean {
+        // module.exports = ...
+        if (
+            ts.isExpressionStatement(node) &&
+            ts.isBinaryExpression(node.expression) &&
+            ts.isPropertyAccessExpression(node.expression.left)
+        ) {
+            const left = node.expression.left
+            if (
+                (left.expression.getText() === 'module' && left.name.getText() === 'exports') ||
+                left.expression.getText() === 'exports'
+            ) {
+                return true
+            }
+        }
+
+        // Object.defineProperty(exports, "__esModule", ...)
+        if (
+            ts.isExpressionStatement(node) &&
+            ts.isCallExpression(node.expression) &&
+            ts.isPropertyAccessExpression(node.expression.expression)
+        ) {
+            const call = node.expression
+            const target = call.expression
+            if (
+                target.expression.getText() === 'Object' &&
+                target.name.getText() === 'defineProperty'
+            ) {
+                const arg1 = call.arguments[0]
+                if (arg1 && arg1.getText() === 'exports') return true
+            }
+
+            if (
+                target.expression.getText() === 'Object' &&
+                target.name.getText() === 'defineProperties'
+            ) {
+                const arg1 = call.arguments[0]
+                if (arg1 && arg1.getText() === 'exports') return true
+            }
+        }
+
+        return false
+    }
+
+    const filteredStatements = sourceFile.statements.filter((stmt) => !isCJSExport(stmt))
+
+    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed })
+    const newSourceFile = ts.factory.updateSourceFile(sourceFile, filteredStatements)
+
+    return printer.printFile(newSourceFile)
+}
+
+
+/**
+ * 清理 CommonJS 导出，转为全局对象导出
+ */
+export function purgePreloadbundle(code: string): string {
+    const sf = ts.createSourceFile('preload.bundle.js', code, ts.ScriptTarget.ESNext, true, ts.ScriptKind.JS);
+
+    const transformer: ts.TransformerFactory<ts.SourceFile> = (context) => {
+        const { factory } = context;
+
+        const visit: ts.Visitor = (node) => {
+            // 1️⃣ 删除 Object.defineProperties(exports, {...})
+            if (
+                ts.isExpressionStatement(node) &&
+                ts.isCallExpression(node.expression) &&
+                ts.isPropertyAccessExpression(node.expression.expression) &&
+                node.expression.expression.expression.getText() === 'Object' &&
+                node.expression.expression.name.getText() === 'defineProperties'
+            ) {
+                const [target] = node.expression.arguments;
+                if (target && target.getText() === 'exports') {
+                    return undefined;
+                }
+            }
+
+            // 2️⃣ 删除 module.exports = ...
+            if (
+                ts.isExpressionStatement(node) &&
+                ts.isBinaryExpression(node.expression) &&
+                node.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+                node.expression.left.getText() === 'module.exports'
+            ) {
+                return undefined;
+            }
+
+            // 3️⃣ exports.default = Foo → Object.assign(window, Foo)
+            if (
+                ts.isExpressionStatement(node) &&
+                ts.isBinaryExpression(node.expression) &&
+                node.expression.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+                ts.isPropertyAccessExpression(node.expression.left)
+            ) {
+                const left = node.expression.left;
+                if (left.expression.getText() === 'exports' && left.name.getText() === 'default') {
+                    const right = node.expression.right;
+                    return factory.createExpressionStatement(
+                        factory.createCallExpression(
+                            factory.createPropertyAccessExpression(factory.createIdentifier('Object'), 'assign'),
+                            undefined,
+                            [factory.createIdentifier('window'), right]
+                        )
+                    );
+                }
+            }
+
+            // 4️⃣ 删除 exports.xxx = ... （非 default）
+            if (
+                ts.isExpressionStatement(node) &&
+                ts.isBinaryExpression(node.expression) &&
+                ts.isPropertyAccessExpression(node.expression.left)
+            ) {
+                const left = node.expression.left;
+                if (left.expression.getText() === 'exports') {
+                    return undefined;
+                }
+            }
+
+            return ts.visitEachChild(node, visit, context);
+        };
+
+        return (sourceFile: ts.SourceFile): ts.SourceFile => {
+            const updatedStatements = sourceFile.statements
+                .map((stmt) => ts.visitNode(stmt, visit))
+                .filter((stmt): stmt is ts.Statement => !!stmt); // ✅ 过滤 undefined
+
+            return factory.updateSourceFile(sourceFile, updatedStatements);
+        };
+    };
+
+    const result = ts.transform(sf, [transformer]);
+    const transformed = result.transformed[0];
+    const printer = ts.createPrinter({ newLine: ts.NewLineKind.LineFeed });
+    const output = printer.printFile(transformed);
+    result.dispose();
+
+    return output;
 }

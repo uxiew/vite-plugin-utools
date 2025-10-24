@@ -52,6 +52,7 @@
     "@types/node": "^22.15.29",
     "@types/resolve": "^1.20.2",
     "bumpp": "^10.1.1",
+    "rollup": "^4.52.5",
     "terser": "^5.40.0",
     "tsup": "^8.5.0",
     "typescript": "^5.8.3",

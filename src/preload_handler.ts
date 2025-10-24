@@ -1,12 +1,13 @@
 import { join } from "node:path";
 import { PRELOAD_FILENAME, UTOOLS_BUILD_MODE, UTOOLS_PRELOAD } from "./constant";
-import { createPreloadFilter, NodeBuiltin } from "./helper";
+import { createPreloadFilter, NodeBuiltin } from "./utils";
 import { OptionsResolver, type RequiredOptions } from "./options";
 import { build, InlineConfig, Plugin, ResolvedConfig } from 'vite';
 import MagicString from "magic-string";
 import type { OutputChunk, ProgramNode, AstNode } from 'rollup';
 import escapeRegexStr from "@jsbits/escape-regex-str";
-import { buildTsd, generateTypes } from "./utils";
+import { buildTsd, generateTypes } from "./prepare";
+import { purgePreloadbundle } from "./preload_analyzer";
 
 
 /**
@@ -115,11 +116,13 @@ function preloadPlugin(options: RequiredOptions): Plugin {
             // console.log('preloadCode\n', preloadCode)
 
             return Promise.resolve().then(() => {
+                //预处理：清理 CommonJS 导出，转为全局对象导出
+                preloadCode = purgePreloadbundle(preloadCode)
+
                 const scode = new MagicString(preloadCode);
                 // clear needless code
-                /* 'use strict'; 's length  &&  add const electron = require('electorn')*/
+                /* 'use strict'; 's length */
                 scode.update(12, 13, name ? `;\nwindow.${name} = Object.create(null);` : '')
-                scode.replaceAll("window.electron", "electron")
 
                 // remove external `require('xxx')`
                 external.forEach((mod) => {
@@ -127,25 +130,7 @@ function preloadPlugin(options: RequiredOptions): Plugin {
                 })
 
                 const globalBase = name ? `window.${name}` : 'window';
-                exportNames.forEach((key) => {
-                    const reg = new RegExp(`exports\\.${key}\\s+=\\s+${key};?\n`, 'mg')
-                    scode.replaceAll(reg, '')
-                    // scode.replaceAll(reg, name ? `window.${name}.${key}` : `window.${key}`)
-                    scode.replaceAll(`defineProperty(exports, '${key}'`, `defineProperty(${name || 'window'}, '${key}'`)
-                });
 
-                // 去除 无用的 node 模块的 exports 定义  
-                // 只能处理 最多一层嵌套括号（如 (a(b)) 可以，(a(b(c))) 不行）
-                scode.replaceAll(/\n?Object\.defineProperties\s*\((?:[^()]|\([^()]*\))*\)\s*;?\n?/gm, '');
-                // 匹配 exports.identifier = ...;
-                // ✅ 安全删除 exports 语句
-                const exportsRegex = /exports\.\w+\s*=\s*[^;]*;/g;
-                let match;
-                while ((match = exportsRegex.exec(preloadCode)) !== null) {
-                    scode.remove(match.index, match.index + match[0].length);
-                }
-                // handle `export default {}`
-                scode.replaceAll(/\n*exports\.default\s*=\s*([a-zA-Z0-9_$]+)?/g, 'Object.assign(window, $1)');
                 // 移除 `export { ... };` 这样的聚合导出语句
                 // ^ -> 行首; \s* -> 任意空格; \{ -> {; [^}]+ -> { 和 } 之间的任意字符; \};? -> }; 或 }
                 const declarationRegex = /^export\s*\{[^}]+\};?/gm;
@@ -159,10 +144,8 @@ function preloadPlugin(options: RequiredOptions): Plugin {
                     scode.append(assignment);
                 }
 
-                // 生成 type?
-                if (!options.noEmit) {
-                    buildTsd(generateTypes(name), 'preload.d.ts')
-                }
+                // 生成 type? 
+                buildTsd(generateTypes(name), 'preload.d.ts')
 
                 // @ts-expect-error onGenerate is function
                 const source = onGenerate ? onGenerate.call(scode, scode.toString()) : scode.toString()

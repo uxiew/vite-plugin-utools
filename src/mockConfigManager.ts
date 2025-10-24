@@ -3,8 +3,8 @@
  * 提供Mock数据的加载、合并和管理功能
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { resolve, extname, dirname } from 'path';
+import { existsSync, readFileSync } from 'node:fs';
+import { resolve, extname, dirname } from 'node:path';
 import { createRequire } from 'module';
 import vm from 'vm';
 import ts from 'typescript';

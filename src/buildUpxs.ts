@@ -6,7 +6,7 @@ import { createGzip } from 'node:zlib';
 import colors from 'picocolors';
 import { ResolvedConfig } from 'vite';
 
-import { cwd, Data, isString } from './helper';
+import { cwd, Data, isString } from './utils';
 import { UpxsOptions as BuildUpxOptions, NestedRequired, UpxsJSON, RequiredOptions, OptionsResolver } from './options';
 
 const formatPluginOptions = (pluginOptions: Data, needPreload: boolean) => {

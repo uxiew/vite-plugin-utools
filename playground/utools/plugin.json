@@ -9,7 +9,11 @@
     {
       "code": "dev",
       "explain": "uTools 官方开源、安全、简洁的xxx",
-      "cmds": ["dev", "upx", "xxx"]
+      "cmds": [
+        "dev",
+        "upx",
+        "xxx"
+      ]
     }
   ]
 }

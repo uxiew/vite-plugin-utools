@@ -1,71 +1,84 @@
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve, resolve as resolvePath } from 'node:path';
-import colors from 'picocolors';
-import { cwd } from './helper';
-import { OptionsResolver, UpxsJSON } from './options';
+import { builtinModules } from 'node:module';
+import { resolve } from 'node:path';
 
-export function validatePluginJson(options: UpxsJSON) {
-  const DOC_URL = 'https://www.u-tools.cn/docs/developer/information/plugin-json.html';
+import { Alias, AliasOptions } from 'vite';
 
-  const requiredKeys = [
-    'name',
-    'pluginName',
-    'description',
-    'author',
-    // 'homepage',
-    'version',
-    'logo',
-    'features',
-  ] as const;
+import { NodePath, types } from '@babel/core';
+import { parse } from '@babel/parser';
+import { createFilter } from '@rollup/pluginutils';
 
-  if (!options.preload) console.warn("no preload file required")
-  const pkg = loadPkg() as any
+const Modules = [
+  ...builtinModules,
+  'assert/strict',
+  'diagnostics_channel',
+  'dns/promises',
+  'fs/promises',
+  'path/posix',
+  'path/win32',
+  'readline/promises',
+  'stream/consumers',
+  'stream/promises',
+  'stream/web',
+  'timers/promises',
+  'util/types',
+  'wasi',
+];
+export const NodeBuiltin = [...new Set([...Modules, ...Modules.map((id) => `node:${id}`)])];
 
-  requiredKeys.forEach((key) => {
-    if (!options[key]) {
-      options[key] = pkg[key]
-      if ('pluginName' === key) options[key] = options['name'].replace(/@\//, '_')
-    }
-    if (!options[key]) throw new Error(colors.red(`[uTools]: 必须有插件字段 ${key}, 查看: ${colors.bold(DOC_URL)}`));
+export const cwd = process.cwd();
+
+export type Data = Record<any, any>;
+
+export const genStatements = (source: string) => parse(source).program.body;
+
+export const ensureHoisted = (statements: types.Statement[]) =>
+  statements.forEach((node) => {
+    //@ts-ignore
+    node._blockHoist = 3;
   });
+
+
+const includeRE = /\.[jt]sx?$/i;
+export const transformFilter = createFilter(includeRE, 'node_modules');
+
+export const createPreloadFilter = (preloadPath: string) =>
+  createFilter([preloadPath, preloadPath.replace(includeRE, '')]);
+
+export const isObject = (val: unknown): val is Data => !!val && typeof val === 'object';
+
+export const isUndef = (val: unknown): val is undefined | null => (val === void 0) || (val === null);
+
+export const isString = (val: unknown): val is string => typeof val === 'string';
+
+const isMatch = (source: string, find: string | RegExp) =>
+  isString(find) ? find === source || source.startsWith(`${find}/`) : source.match(find);
+
+export type ReplaceAlias = (path: string) => string;
+export const createReplaceAlias = (aliasOpts: AliasOptions = []): ReplaceAlias => {
+  const aliasEntires: Alias[] = Array.isArray(aliasOpts)
+    ? aliasOpts
+    : Object.entries(aliasOpts).map(([find, replacement]) => ({ find, replacement }));
+
+  return (path) => {
+    const entry = aliasEntires.find(({ find }) => isMatch(path, find));
+    return entry ? resolve(cwd, path.replace(entry.find, entry.replacement)) : path;
+  };
 };
 
-export function loadPkg(dep = false): string[] | object {
-  const pkg = JSON.parse(readFileSync(resolvePath(cwd, 'package.json'), 'utf8'))
-  return dep ? [...Object.keys(pkg["devDependencies"]), ...Object.keys(pkg["dependencies"])] : pkg
-}
+export const getModuleName = (id: string) => {
+  const lastIndex = id.lastIndexOf('node_modules');
+  if (!~lastIndex) return void 0;
 
-/**
- * @description fs 异步生产新的文件，与 preload 在同级目录
- */
-export function buildTsd(content: string, filename: string) {
-  colors.green(`[uTools]: 生成 ${filename} 类型声明文件`)
-  writeFileSync(resolve(dirname(OptionsResolver.upxsData.preload), filename), content)
-}
+  return id.slice(lastIndex + 'node_modules/'.length).match(/^(\S+?)\//)?.[1];
+};
 
-/**
- * @description 生成 tsd 类型声明文件
- * @param {string} name window上的挂载名（例如 preload）
- */
-export function generateTypes(name: string) {
-  let typesContent = `// 该类型定义文件由 @ver5/vite-plugin-utools 自动生成
-// 请不要更改这个文件！
-import type defaultExport from './preload'
-import type * as namedExports from './preload'
+// HACK
+// look from source:https://github.com/vitejs/vite/blob/main/packages/vite/src/node/logger.ts#L144 & https://github.com/alexeyraspopov/picocolors/blob/main/picocolors.js#LL31C29-L31C48
+export const getLocalUrl = (coloredStr: string) => {
+  ["[1m", "[22m", "[36m", "[39m", '[32m'].forEach((color) => {
+    coloredStr = coloredStr.replaceAll(color, '').replace(/\x1b/gim, '')
+  })
 
-export type PreloadDefaultType = typeof defaultExport
-export type PreloadNamedExportsType = typeof namedExports
-
-export interface ExportsTypesForMock {
-    window: PreloadDefaultType,
-    ${name}: PreloadNamedExportsType,
-}
-
-declare global {
-  interface Window extends PreloadDefaultType {
-    ${name}: PreloadNamedExportsType;
-  }
-}
-`
-  return typesContent;
+  const urlArr = coloredStr.split(': ')
+  return urlArr[urlArr.length - 1].trim()
 }

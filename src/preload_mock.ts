@@ -63,11 +63,12 @@ export function preloadMockPlugin(options: RequiredOptions): Plugin {
             const mockModuleSrc = path.resolve(base, normalisedDir);
             // const mockModuleSrc = `${base}/utools/preload_mock.ts`;
 
+            const globalName = preload.name
             const injectionCode = `
         console.log('[uTools Mock] 开始注入 preload mocks...');
         // 从 mock 文件中导入所有内容
         import defaultExport from '${mockModuleSrc}';
-        const { window: _, preload:__ } = defaultExport;
+        const { window: _, ${globalName}:__ } = defaultExport;
 
         // 规则 1：默认导出直接挂载到 window
         if (typeof _ === 'object' && _ !== null) {
@@ -76,8 +77,8 @@ export function preloadMockPlugin(options: RequiredOptions): Plugin {
         }
 
         // 规则 2：所有命名导出挂载到 window.preload
-        window.${preload.name} = __;
-        console.log('[uTools Mock] 命名导出挂载到 window.${preload.name}:', __);
+        window.${globalName} = __;
+        console.log('[uTools Mock] 命名导出挂载到 window.${globalName}:', __);
       `;
             return [
                 {
