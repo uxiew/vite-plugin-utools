@@ -3,7 +3,7 @@ import { basename, dirname, resolve, resolve as resolvePath } from 'node:path';
 import { ResolvedConfig } from 'vite';
 import colors from 'picocolors';
 import { cwd } from './utils';
-import { OptionsResolver, UpxsJSON } from './options';
+import { OptionsResolver, upxJSON, getPreloadId, resolvePathToPreload } from './options';
 
 
 /**
@@ -13,7 +13,7 @@ import { OptionsResolver, UpxsJSON } from './options';
  * @returns 文件在目标目录中的绝对路径
  */
 export const getUtoolsPath = () => {
-  return dirname(OptionsResolver.upxsData.preload);
+  return dirname(OptionsResolver.upxData.preload);
 }
 
 /**
@@ -37,28 +37,28 @@ export const getNodeModuleName = (id: string) => {
   return id.slice(lastIndex + 'node_modules/'.length).match(/^(\S+?)\//)?.[1];
 };
 
-export function copyUpxsFiles(config: ResolvedConfig) {
-  // if (!existsSync(getDistPath(config))) mkdirSync(getDistPath(config))
-  const { logo } = OptionsResolver.upxsData
+export function copyUpxFiles(config: ResolvedConfig) {
+  const { logo } = OptionsResolver.upxData
   copyFile(logo, resolve(getDistPath(config), basename(logo)), (err) => {
     if (err) throw err;
   })
 }
 
-export function writeUpxsFiles(config: ResolvedConfig, localUrl?: string) {
+export function prepareUpxFiles(config: ResolvedConfig, localUrl?: string) {
   if (!existsSync(getDistPath(config))) mkdirSync(getDistPath(config))
   writeFileSync(getDistPath(config, 'plugin.json'), JSON.stringify({
-    ...OptionsResolver.upxsData,
-    logo: basename(OptionsResolver.upxsData.logo),
+    ...OptionsResolver.upxData,
+    logo: basename(OptionsResolver.upxData.logo),
     preload: 'preload.js',
     development: {
       main: localUrl
     }
   }, null, 2), { encoding: 'utf-8' })
+  copyUpxFiles(config);
 }
 
 
-export function validatePluginJson(options: UpxsJSON) {
+export function validatePluginJson(options: upxJSON) {
   const DOC_URL = 'https://www.u-tools.cn/docs/developer/information/plugin-json.html';
 
   const requiredKeys = [
@@ -91,35 +91,10 @@ export function loadPkg(dep = false): string[] | object {
 
 /**
  * @description fs 异步生产新的文件，与 preload 在同级目录
+ * @param content 要写入的内容
+ * @param filename 要写入的文件名
  */
-export function buildTsd(content: string, filename: string) {
-  colors.green(`[uTools]: 生成 ${filename} 类型声明文件`)
-  writeFileSync(resolve(dirname(OptionsResolver.upxsData.preload), filename), content)
-}
-
-/**
- * @description 生成 tsd 类型声明文件
- * @param {string} name window上的挂载名（例如 preload）
- */
-export function generateTypes(name: string) {
-  let typesContent = `// 该类型定义文件由 @ver5/vite-plugin-utools 自动生成
-// 请不要更改这个文件！
-import type defaultExport from './preload'
-import type * as namedExports from './preload'
-
-export type PreloadDefaultType = typeof defaultExport
-export type PreloadNamedExportsType = typeof namedExports
-
-export interface ExportsTypesForMock {
-    window: PreloadDefaultType,
-    ${name}: PreloadNamedExportsType,
-}
-
-declare global {
-  interface Window extends PreloadDefaultType {
-    ${name}: PreloadNamedExportsType;
-  }
-}
-`
-  return typesContent;
+export function buildPreloadTsd(content: string) {
+  const dstFileName = '_' + getPreloadId() + '.d.ts'
+  writeFileSync(resolvePathToPreload(dstFileName), content)
 }

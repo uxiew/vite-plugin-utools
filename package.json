@@ -8,11 +8,14 @@
   "exports": {
     ".": {
       "import": "./dist/index.mjs",
-      "types": "./dist/index.d.ts",
+      "types": "./dist/index.d.mts",
       "require": "./dist/index.js"
     },
     "./utools": {
       "types": "./utools.d.ts"
+    },
+    "./utoolsMock": {
+      "import": "./dist/utoolsApiMockImpl.mjs"
     }
   },
   "bin": {
@@ -21,6 +24,7 @@
   "files": [
     "dist",
     "utools.d.ts",
+    "ubw.d.ts",
     "electron.d.ts",
     "templates"
   ],
@@ -51,6 +55,7 @@
     "@types/fs-extra": "^11.0.1",
     "@types/node": "^22.15.29",
     "@types/resolve": "^1.20.2",
+    "@vitest/coverage-v8": "^1.6.1",
     "bumpp": "^10.1.1",
     "rollup": "^4.52.5",
     "terser": "^5.40.0",

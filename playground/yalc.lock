@@ -1,0 +1,9 @@
+{
+  "version": "v1",
+  "packages": {
+    "@ver5/vite-plugin-utools": {
+      "signature": "b429085dda7596f2bd990d4f5b49f0ef",
+      "file": true
+    }
+  }
+}

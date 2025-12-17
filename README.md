@@ -27,23 +27,49 @@ export default {
       configFile: "./utools/plugin.json",
       // 不需要打包的库
       external: ["electron"],
-      // preload 相关配置
-      preload: {
-        // 热更新
-        watch: true,
-        // window上的挂载名，为空则表示直接将导出挂载到window下
-        name: "preload",
-        // 是否压缩
-        minify: false,
+      // 热更新
+      watch: true,
+      // window上的挂载名，为空则表示直接将导出挂载到window下
+      name: "preload",
+      // 是否压缩
+      minify: false,
+      // 额外的 Vite 配置 (用于 preload 构建)
+      viteConfig: {
+        plugins: []
       },
       upx: {
         outDir: "dist",
         outName: "[pluginName]_[version].upx",
       },
+      // Mock 功能配置
+      mock: {
+        enabled: true,
+        showBadge: true
+      }
     }),
   ],
 };
 ```
+
+### typescript 开发配置
+
+在`tsconfig.json`中添加配置：
+
+```json
+{
+  "compilerOptions": {
+    "types": [
+      // utools api 提示
+      "@ver5/vite-plugin-utools/utools"
+    ]
+  },
+  "include": [
+    // window 下注入提示
+    "utools/*.ts",
+  ],
+}
+```
+
 
 ## 准备开发
 
@@ -118,7 +144,7 @@ dist/node_modules/@xmldom.js  122.16 kB │ gzip: 30.23 kB
 
 启动项目后，生成的`dist`文件夹中就会包括所需的开发文件了，在“uTools 开发者工具”中指向目标目录中的`plugin.json`即可！
 
-# upxs 打包
+# upx 打包
 
 插件的 `plugin.json` 文件必须项
 以下字段不设置，会自动取`package.json`中对应的自动字段，没有的话，则报错！
@@ -160,29 +186,29 @@ dist/node_modules/@xmldom.js  122.16 kB │ gzip: 30.23 kB
 
 ## external
 
-默认值：`electron`，`electron`总是会被排除掉。
+默认值：`electron`，而且 `electron` 总是会被排除掉。
 
 对于不想打包的包，可以先`external`排除掉，例如`external: ['tiktoken']`,，然后通过 [vite-plugin-static-copy](https://github.com/sapphi-red/vite-plugin-static-copy) 复制到目标目录。
 
-## preload.name
+## name
 
 默认值：`preload`
 
 `preload.js`在`window`的挂载名
 
-## preload.watch
+## watch
 
 默认值：`true`
 
 `preload.js`修改后重新构建，配合 uTools 开发者工具开启`隐藏插件后完全退出`使用
 
-## preload.minify
+## minify
 
 默认值：`false`
 
 启用文件的压缩
 
-## preload.onGenerate
+## onGenerate
 
 默认值：`undefined`
 返回值：`(preloadCode:string) => string(required)`
@@ -190,15 +216,21 @@ dist/node_modules/@xmldom.js  122.16 kB │ gzip: 30.23 kB
 可以通过该函数，修改`preload.js`内容。
 该函数的返回值会被设置为`preload.js`的内容。
 
-## upxs.outDir
+## viteConfig 
+
+默认值：`undefined`
+
+额外的 Vite 配置，用于合并到 preload 的构建配置中。可以用于注入插件、配置别名等。
+
+## upx.outDir
 
 默认值： `dist`
 
 插件打包输出路径
 
-## upxs.outName
+## upx.outName
 
-默认值：`[pluginName]_[version].upxs`
+默认值：`[pluginName]_[version].upx`
 
 插件输出文件名
 
@@ -232,235 +264,45 @@ export default {
 
 # Mock 功能
 
-插件提供了完整的 Mock 功能，让你在开发环境中无需 uTools 即可测试插件功能。
+插件提供了 Mock 功能，让你在浏览器开发环境中（`npm run dev`）无需打开 uTools 即可测试插件功能。
 
-## 🚀 新版本 Mock 功能特性
+## 面向接口开发
 
-- **完整的 uTools API Mock** - 基于官方 `utools-api-types` 实现所有 API
-- **智能 Preload 分析** - 自动分析项目中的 preload 脚本并生成对应 Mock
-- **用户自定义支持** - 提供清晰的文件结构，支持用户扩展和覆盖 Mock 行为
-- **增量更新** - 自动生成的文件不会覆盖用户自定义内容
-- **TypeScript 支持** - 完整的类型定义和智能提示
+插件会自动分析你的 `preload.ts` 文件，并在同级目录下生成 `_mock.auto.ts` 文件。
+建议不要修改 `_mock.auto.ts`，而是创建一个同名的 `.mock.ts` 文件（例如 `preload.ts` -> `preload.mock.ts`）来进行自定义 Mock。
 
-## 基础配置
+Mock 系统特性：
 
-```typescript
-// vite.config.ts
-export default defineConfig({
-  plugins: [
-    utools({
-      mock: {
-        enabled: true, // 启用 Mock 功能
-        showDevIndicator: true, // 显示开发环境指示器 
-      }
-    })
-  ]
-})
+*   **自动模拟 window.utools**：提供了一套完整的 `window.utools` API 模拟实现（基于内存）。
+*   **自动模拟 preload 导出**：根据 `preload.ts` 的导出，自动挂载 mocks 到 `window.preload`（或其他配置的名称）。
+*   **热更新**：修改 `preload.ts` 或 mock 文件后，浏览器会自动刷新，无需重启。
+*   **环境隔离**：在真实 uTools 环境中自动失效，不会影响生产环境。
+
+你可以通过 `window.$isMockDev` 变量在代码中判断当前是否处于 Mock 开发环境。
+
+## 目录结构示例
+
+```
+utools/
+├── preload.ts          # 真实源码
+├── _mock.auto.ts       # 自动生成的类型和基础 Mock（勿改）
+└── preload.mock.ts     # (可选) 用户自定义覆盖 Mock 实现
 ```
 
-## 高级配置
+## 自定义 Mock 示例
 
-创建 `utools.mock.ts` 文件进行详细配置：
+在 `preload.mock.ts` 中：
 
 ```typescript
-import { MockConfig } from '@ver5/vite-plugin-utools'
-
-const config: MockConfig = {
-  enabled: true,
-  showDevIndicator: true, 
-
-  // uTools API Mock 配置
-  utoolsApi: {
-    enabled: true,
-    customMethods: {
-      // 自定义通知方法
-      showNotification: (text: string) => {
-        console.log('Custom notification:', text);
-        // 在页面上显示自定义通知
-        const notification = document.createElement('div');
-        notification.style.cssText = `
-          position: fixed; top: 20px; right: 20px;
-          background: #4CAF50; color: white;
-          padding: 12px 20px; border-radius: 4px;
-          z-index: 10000;
-        `;
-        notification.textContent = text;
-        document.body.appendChild(notification);
-        setTimeout(() => document.body.removeChild(notification), 3000);
-      }
-    },
-
-    // dbStorage 初始数据
-    dbStorage: {
-      prefix: 'my_app_mock_',
-      initialData: {
-        'user_settings': JSON.stringify({
-          theme: 'dark',
-          language: 'zh-CN'
-        })
-      }
-    }
-  },
-
-  // Preload API Mock 配置
-  preloadApi: {
-    enabled: true,
-    mountName: 'preload', // 挂载到 window.preload
-    customMethods: {
-      // 自定义方法实现
-      executeCode: async (code: string, language: string) => {
-        console.log(`Executing ${language} code:`, code);
-        return {
-          success: true,
-          output: `Mock execution result for ${language}`
-        };
-      }
-    }
-  }
+// 覆盖默认的 Mock 实现
+export const hello = () => {
+  console.log('Mock hello called!');
+  return 'Mock data';
 }
 
-export default config
+// 模拟 window.utools 行为
+window.utools.dbStorage.setItem('test', 'data');
 ```
-
-## 🎯 智能 Mock 文件管理
-
- 插件会：
-
-1. **自动分析** preload 文件中的导出方法
-2. **生成 Mock 文件结构**（默认位于 `utools/_mock`）：
-   ```
-   utools/_mock/
-   ├── main.js                  # 浏览器端入口，加载拆分后的 Mock 运行时
-   ├── runtime-config.js        # 暴露 manifest、配置与用户覆写引用
-   ├── runtime-reporting.js     # 事件 ID、摘要与日志记录工具
-   ├── runtime-signatures.js    # 针对签名生成的统一工厂
-   ├── runtime-notify.js        # Toast 管理器与样式注入
-   ├── runtime-bootstrap.js     # 安装 window.utools 代理与命名空间代理
-   ├── manifest.json            # 签名清单
-   ├── config.json              # Mock 配置快照
-   ├── preload-bridge.ts        # preload 桥接模块（自动更新）
-   ├── utools-api.ts            # uTools API 辅助模块（自动更新）
-   ├── preload-mock.ts          # ✅ 包含自动区域与自定义区域的预载 Mock
-   ├── utools-mock.ts           # ✅ 包含自动区域与自定义区域的 uTools Mock
-   └── index.ts                 # MockConfig 聚合入口
-   ```
-
-   若根目录不存在 `utools.mock.ts`，生成器会创建一个引用 `utools/_mock/index.ts` 的默认文件。
-
-3. **智能更新** - 自动覆盖 `preload-mock.ts`、`utools-mock.ts` 中标记为 “AUTO-GENERATED” 的代码块，保留其余自定义实现。
-
-### 生成的辅助模块
-
-- `utools/_mock/utools-api.ts`：提供 `createMockUtoolsApi` 等工具，统一封装 `window.utools` 相关的默认模拟实现，可在自定义覆写时复用或参考。
-- `utools/_mock/preload-bridge.ts`：根据 `manifest.preloadName` 生成的桥接器，确保前端代码总是访问到最新的 preload 方法，同时支持在 `utools.mock.ts` 中通过 `customMethods` 动态覆写。
-- `utools.mock.ts`：若用户未提供自定义配置，会自动生成并导出 `utools/_mock/index.ts`。
-
-> 生成目录中的 `/* AUTO-GENERATED ... */` 区域会在重新分析后更新，保留该区域外的自定义实现即可。
-
-## 📝 自定义 Mock 行为
-
-### 使用辅助函数快速声明 Mock
-
-```ts
-import {
-  defineMockConfig,
-  definePreloadMocks,
-  defineUtoolsMocks
-} from '@ver5/vite-plugin-utools';
-
-const autoGeneratedPreloadMocks = definePreloadMocks({
-  /* AUTO-GENERATED PRELOAD MOCK START */
-  // CLI 会在这里写入根据 preload.ts 检测到的方法
-  /* AUTO-GENERATED PRELOAD MOCK END */
-});
-
-const autoGeneratedUtoolsMocks = defineUtoolsMocks({
-  /* AUTO-GENERATED UTOOLS MOCK START */
-  // CLI 会在这里写入常用的 utools API scaffold
-  /* AUTO-GENERATED UTOOLS MOCK END */
-});
-
-export default defineMockConfig({
-  preloadApi: {
-    customMethods: definePreloadMocks({
-      ...autoGeneratedPreloadMocks,
-      // 在此添加或重写预载逻辑
-    })
-  },
-  utoolsApi: {
-    customMethods: defineUtoolsMocks({
-      ...autoGeneratedUtoolsMocks,
-      // 在此添加或重写 window.utools 行为
-    })
-  }
-});
-```
-
-这三个辅助函数是零开销的语法糖，可以获得完整的类型推断，并引导团队成员在同一位置集中定义 Mock 行为。
-
-> 如果需要在不同环境合并多个配置块，可使用 `applyMockOverrides(baseConfig, { preload, utools })` 辅助函数，它会自动合并 `customMethods`。
-
-### 自定义 uTools API
-
-编辑 `utools/_mock/utools-mock.ts`：
-
-```ts
-import { defineUtoolsMocks } from '@ver5/vite-plugin-utools';
-
-const autoGeneratedUtoolsMocks = defineUtoolsMocks({
-  /* AUTO-GENERATED UTOOLS MOCK START */
-  // 自动生成的默认实现
-  /* AUTO-GENERATED UTOOLS MOCK END */
-});
-
-export const utoolsMocks = defineUtoolsMocks({
-  ...autoGeneratedUtoolsMocks,
-  showNotification(text) {
-    console.log('[Mock override] showNotification', text);
-    return true;
-  }
-});
-```
-
-### 自定义 Preload API
-
-编辑 `utools/_mock/preload-mock.ts`：
-
-```ts
-import { definePreloadMocks } from '@ver5/vite-plugin-utools';
-
-const autoGeneratedPreloadMocks = definePreloadMocks({
-  /* AUTO-GENERATED PRELOAD MOCK START */
-  // 自动生成的默认实现
-  /* AUTO-GENERATED PRELOAD MOCK END */
-});
-
-export const preloadMocks = definePreloadMocks({
-  ...autoGeneratedPreloadMocks,
-  executeCode(code, language) {
-    console.log('[Mock override] executeCode', code, language);
-    return Promise.resolve({ success: true, output: 'done' });
-  }
-});
-```
-
-## 🔧 开发体验
-
-- **详细日志** - 控制台显示所有 Mock API 调用
-- **热重载支持** - 配置文件修改后自动重新加载
-- **类型安全** - 完整的 TypeScript 类型支持
-
-## 🧠 Mock 运行时工作流
-
-1. **EnhancedPreloadAnalyzer** 会解析 `preload.ts`，同时收集通过 `window.xxx` 或 `window['xxx']` 挂载的 API，并为每个方法生成唯一的 `namespace` 与 `id` 标识。
-2. **MockManifestBuilder** 使用这些签名写入 `manifest.json`，在签名哈希变更或 `MANIFEST_VERSION`（当前为 `1.2.0`）更新时，自动重写 `utools/_mock` 目录中的 `main.js`、`preload-bridge.ts` 等文件。
-3. **mock main.js** 会根据命名空间自动挂载 Mock：
-   - `window.preload` 对应模块导出的 API。
-   - 其他命名空间（如 `window.codeRunner`）在保留原对象的同时注入 Mock。
-   - 所有事件 ID 均由 `createEventId()` 生成，以兼容缺少 `crypto.randomUUID()` 的旧环境。
-4. **preload-bridge.ts** 仅桥接 `manifest.preloadName` 下的 API，并支持按照 `id`、`name`、`namespace.method` 顺序查找覆写函数。
-
-> **提示**：若需要强制同步最新运行时代码，可删除 `utools/_mock` 目录，执行 `pnpm --filter @ver5/vite-plugin-utools build` 后再次运行项目或调用 `MockManifestBuilder` 重新生成 Mock 资产。
 
 # TODO
 
@@ -468,7 +310,7 @@ export const preloadMocks = definePreloadMocks({
 - [x] 完整的 uTools API Mock 实现
 - [x] 智能 preload 分析和 Mock 生成
 - [x] 用户自定义 Mock 支持
-- [ ] preload 自动 reload
+- [x] preload 自动 reload
 
 # 参考
 

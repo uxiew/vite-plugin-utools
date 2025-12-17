@@ -1,5 +1,5 @@
 import { builtinModules } from 'node:module';
-import { resolve } from 'node:path';
+import { basename, dirname, resolve } from 'node:path';
 
 import { Alias, AliasOptions } from 'vite';
 

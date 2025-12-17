@@ -1,17 +1,22 @@
 import path from 'node:path';
-import { build as viteBuild, Plugin, ResolvedConfig } from 'vite';
+import { normalizePath, Plugin, ResolvedConfig } from 'vite';
 
-import buildUpxs from './buildUpxs';
-import { PRELOAD_FILENAME, SSR_MODE, UTOOLS_BUILD_MODE, UTOOLS_PRELOAD } from './constant';
+import buildUpx from './upx_handler';
 import {
   getLocalUrl,
   isUndef,
 } from './utils';
 import { OptionsResolver, RequiredOptions } from './options';
-import { writeUpxsFiles, getDistPath, copyUpxsFiles, getUtoolsPath } from './prepare';
-import { buildPreload } from './preload_handler';
+import { prepareUpxFiles, getUtoolsPath } from './prepare';
+import { buildPreload } from './plugin_preload';
 
 let localUrl = ''
+
+/**
+ * 开发模式下的插件，用于在开发服务器启动时，根据配置文件生成 preload.js 文件
+ * @param options 
+ * @returns 
+ */
 export const devPlugin = (options: RequiredOptions): Plugin => {
   if (!options.configFile)
     throw new Error('[utools]: configFile is required!')
@@ -29,37 +34,48 @@ export const devPlugin = (options: RequiredOptions): Plugin => {
       }
     },
     configResolved(rc) {
-      const { logger, command } = rc
-      const log = logger.info
-      logger.info = (info) => {
-        // info = info.includes(SSR_MODE) ? info.replace(SSR_MODE, "uTools bundle") : info
-        if (info.includes('Local')) {
-          writeUpxsFiles(rc, localUrl = getLocalUrl(info))
-        }
-        log(info)
-      }
       // build preload.js 
       buildPreload(options)
     },
     configureServer(server) {
-      const pluginJsonPath = path.resolve(getUtoolsPath(), 'plugin.json');
-      // server.
-      let lastUpdateTime = 0;
-      server.watcher.on('change', (file) => {
-        if (file === pluginJsonPath && Date.now() - lastUpdateTime > 500) {
-          lastUpdateTime = Date.now();
-          console.log('[file changed]', path.basename(file))
-          OptionsResolver.refreshUpxsJSON(options.configFile)
-          writeUpxsFiles(server.config, localUrl)
-          copyUpxsFiles(server.config)
+      server.httpServer?.on('listening', () => {
+        const local = server.resolvedUrls?.local[0];
+        if (local) {
+          localUrl = local;
+          prepareUpxFiles(server.config, localUrl);
         }
-      })
+      });
+
+      const pluginJsonPath = normalizePath(path.resolve(getUtoolsPath(), 'plugin.json'));
+      const userConfigPath = normalizePath(options.configFile);
+
+      const handleFileChange = (file: string) => {
+        const normalizedFile = normalizePath(file);
+
+        if (normalizedFile === userConfigPath || normalizedFile === pluginJsonPath) {
+          console.log(`[uTools] ${path.basename(file)} changed, updating...`);
+          try {
+            // 重新读取并刷新配置
+            OptionsResolver.refreshUpxJSON(options.configFile);
+            // 重新写入
+            prepareUpxFiles(server.config, localUrl);
+          } catch (err) {
+            console.error('[uTools] Failed to update plugin.json:', err);
+          }
+        }
+      };
+      server.watcher.on('change', handleFileChange);
+      server.watcher.on('add', handleFileChange);
     }
   };
 };
 
+/**
+ * 构建模式下的插件，用于在构建时，根据配置文件生成 preload.js 文件
+ * @param options 
+ * @returns 
+ */
 export const buildPlugin = (options: RequiredOptions): Plugin => {
-  const { preload: { name, onGenerate }, external } = options
   let config: ResolvedConfig
 
   return {
@@ -71,30 +87,17 @@ export const buildPlugin = (options: RequiredOptions): Plugin => {
       config = c
     },
     buildEnd() {
-      buildPreload(options).then(() => {
-        copyUpxsFiles(config)
-      })
-    }
-  };
-};
-
-/** 构建 upx 文件 */
-export const buildUpxsPlugin = (options: RequiredOptions): Plugin => {
-
-  let config: ResolvedConfig;
-
-  return {
-    name: 'vite:utools-build-upx',
-    apply: 'build',
-    configResolved: (c) => {
-      config = c;
+      const buildOptions = {
+        ...options,
+        // The preload build was defaulting to watch: true (from options.preload.watch), which caused Vite/Rollup to stay in watch mode even during a production build.
+        watch: false
+      }
+      buildPreload(buildOptions)
     },
     closeBundle: async () => {
-      if (config.mode === UTOOLS_PRELOAD && config.isProduction) {
-        writeUpxsFiles(config, localUrl)
-        if (!options.configFile || !options.upxs) return;
-        await buildUpxs(config.build.outDir, options, config.logger);
-      }
+      prepareUpxFiles(config, localUrl)
+      if (!options.configFile || !options.upx) return;
+      await buildUpx(config.build.outDir, options, config.logger);
     },
   };
 };

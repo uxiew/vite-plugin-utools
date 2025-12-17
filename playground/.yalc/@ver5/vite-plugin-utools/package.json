@@ -1,0 +1,69 @@
+{
+  "name": "@ver5/vite-plugin-utools",
+  "version": "0.3.3",
+  "description": "Utools for Vite by ChandlerVer5",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "types": "./dist/index.d.mts",
+      "require": "./dist/index.js"
+    },
+    "./utools": {
+      "types": "./utools.d.ts"
+    },
+    "./utoolsMock": {
+      "import": "./dist/utoolsApiMockImpl.mjs"
+    }
+  },
+  "bin": {
+    "utools": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "utools.d.ts",
+    "ubw.d.ts",
+    "electron.d.ts",
+    "templates"
+  ],
+  "scripts": {
+    "build": "tsup-node",
+    "dev": "npm run build -- --watch",
+    "test": "vitest run",
+    "release": "npm run build && bumpp --commit --tag --push && npm publish"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ChandlerVer5/-ver5-vite-plugin-utools.git"
+  },
+  "keywords": [
+    "vite",
+    "vite-plugin",
+    "utools"
+  ],
+  "author": "chandlerver5",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/ChandlerVer5/-ver5-vite-plugin-utools/issues"
+  },
+  "homepage": "https://github.com/chandlerver5/vite-plugin-utools#readme",
+  "dependencies": {
+    "@babel/core": "^7.27.4",
+    "@babel/generator": "^7.27.3",
+    "@babel/parser": "^7.27.4",
+    "@electron/asar": "^4.0.0",
+    "@jsbits/escape-regex-str": "^1.0.3",
+    "@rollup/pluginutils": "^5.1.4",
+    "fs-extra": "^11.1.1",
+    "magic-string": "^0.30.0",
+    "original-fs": "^1.2.0",
+    "picocolors": "^1.0.0"
+  },
+  "publishConfig": {
+    "registry": "https://registry.npmjs.org/",
+    "access": "public"
+  },
+  "yalcSig": "b429085dda7596f2bd990d4f5b49f0ef"
+}

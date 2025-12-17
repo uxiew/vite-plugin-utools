@@ -1,19 +1,12 @@
 import type MagicString from 'magic-string';
-import { normalizePath } from 'vite';
+import { normalizePath, InlineConfig, RollupCommonJSOptions } from 'vite';
 import { basename, dirname, isAbsolute, resolve, resolve as resolvePath } from 'node:path';
 import { readFileSync, existsSync, writeFileSync } from 'node:fs';
 import { cwd, Data, isObject, isUndef } from './utils';
 import { loadPkg, validatePluginJson } from './prepare';
+import { RollupOptions } from 'rollup';
 
-export interface PreloadOptions {
-  watch?: boolean;
-  // window 环境下的 preload 导出内容的挂载属性
-  name?: string;
-  minify?: boolean;
-  onGenerate?: (this: MagicString, code: string) => string
-}
-
-export interface UpxsJSON {
+export interface upxJSON {
   name: string;
   logo: string;
   main?: string,
@@ -26,94 +19,66 @@ export interface UpxsJSON {
   version?: string;
 }
 
-export interface UpxsOptions {
+export interface upxOptions {
   outDir?: string;
   outName?: string;
 }
 
-export interface MockOptions {
-  /**
-   * Whether to enable the mock
-   * @default true in development, false in production
-   */
-  enabled?: boolean;
-
-  /**
-   * Mock data for different environments
-   */
-  mockData?: {
-    [key: string]: any;
-  };
-
-  /**
-   * Custom mock functions
-   */
-  customMocks?: {
-    [key: string]: Function;
-  };
-
-  /**
-   * Whether to show development indicator
-   * @default true
-   */
-  showDevIndicator?: boolean;
-
-  /**
-   * Custom styles for development indicator
-   */
-  devIndicatorStyles?: string;
-
-  /**
-   * uTools API Mock configuration
-   */
-  utoolsApi?: {
-    enabled?: boolean;
-    customMethods?: {
-      [key: string]: Function;
-    };
-    dbStorage?: {
-      prefix?: string;
-      initialData?: {
-        [key: string]: any;
-      };
-    };
-  };
-
-  /**
-   * Directory used to emit generated mock assets.
-   * Defaults to `.utools_mock`.
-   */
-  directory?: string;
-
-  /**
-   * Preload API Mock configuration
-   */
-  preloadApi?: {
-    enabled?: boolean;
-    mountName?: string;
-    customMethods?: {
-      [key: string]: Function;
-    };
-  };
-}
-
 export interface Options {
-  configFile?: string;
+  configFile: string;
   noEmit?: boolean;
-  external?: string[],
-  preload?: PreloadOptions | null
-  /** @deprecated upx 插件选项 */
-  upx?: UpxsOptions | null
-  upxs?: UpxsOptions | null
-  mock?: MockOptions | null
+  watch?: boolean;
+  /**
+   * window 环境下的 preload 导出内容的挂载属性
+   * @default 'preload'
+   */
+  name?: string;
+  minify?: boolean;
+  onGenerate?: (this: MagicString) => string
+  external?: RollupOptions['external'],
+  define?: InlineConfig['define'],
+  // /** @deprecated upx 插件选项 */
+  upx?: upxOptions | null,
+  mock?: {
+    enabled: boolean,
+    showBadge?: boolean
+  },
+  /**
+   * 额外的 Vite 配置，用于合并到 preload 的构建配置中
+   */
+  viteConfig?: InlineConfig
 }
 
 export type NestedRequired<T> = {
-  // [P in keyof T]-?: Exclude<T[P], undefined | null>
-  [P in keyof T]-?: NestedRequired<Exclude<T[P], undefined | null>>;
+  [P in keyof T]-?: Exclude<T[P], undefined | null>
+  // [P in keyof T]-?: P extends 'viteConfig' | 'external' | 'define' ? Exclude<T[P], undefined | null> : NestedRequired<Exclude<T[P], undefined | null>>;
 };
 
 export type RequiredOptions = NestedRequired<Options>;
+
+/**
+ * 解析目标路径到预加载文件的绝对路径
+ * @param targetPath 目标路径
+ * @returns 预加载文件的绝对路径
+ */
+export const resolvePathToPreload = (targetPath: string) => resolve(dirname(getPreloadPath()), targetPath)
+
+/**
+ * 获取plugin.json 中指向的 preload 路径
+ * @param options 
+ * @returns 
+ */
+export function getPreloadPath() {
+  return OptionsResolver.upxData.preload
+}
+
+/**
+ * 获取 preload 文件的 id（文件名），去除后缀名(js/ts)
+ * @returns preload 文件的 id（文件名）
+ */
+export function getPreloadId() {
+  return basename(getPreloadPath()).replace(/\.(ts|js)$/, '')
+}
 
 /**
  * @description 插件选项解析器
@@ -127,36 +92,33 @@ export type RequiredOptions = NestedRequired<Options>;
 export class OptionsResolver {
   // 默认选项
   defaultOptions: Options = {
+    configFile: '',
     external: [],
-    preload: {
-      watch: true,
-      name: 'preload',
-      minify: false,
-    },
-    upxs: {
-      outDir: 'dist',
-      outName: '[pluginName]_[version].upx',
-    },
+    watch: true,
+    name: 'preload',
+    minify: false,
     mock: {
       enabled: true,
-      showDevIndicator: true,
-      mockData: {},
-      customMocks: {},
+      showBadge: true
     },
+    upx: {
+      outDir: 'dist',
+      outName: '[pluginName]_[version].upx',
+    }
   };
 
   static resolvedOptions: RequiredOptions;
   // 插件的一些信息
-  static upxsData: Required<UpxsJSON>
+  static upxData: Required<upxJSON>
 
   constructor(public options: Options) {
     OptionsResolver.resolvedOptions = this.resolve(options);
-    OptionsResolver.upxsData = OptionsResolver.refreshUpxsJSON(options.configFile)
+    OptionsResolver.upxData = OptionsResolver.refreshUpxJSON(options.configFile)
   }
 
   /**
    * @description 获取插件的 upx 选项
-   * @returns {UpxsOptions} 插件的 upx 选项
+   * @returns {upxOptions} 插件的 upx 选项
    */
   get resolvedOptions() {
     return OptionsResolver.resolvedOptions
@@ -164,7 +126,7 @@ export class OptionsResolver {
 
   // 插件的 preload 路径
   static get preloadPath() {
-    return OptionsResolver.upxsData.preload
+    return OptionsResolver.upxData.preload
   }
 
   private resolve(options: Options) {
@@ -176,15 +138,19 @@ export class OptionsResolver {
 
         // @ts-ignore
         const optsVal = this.options[key];
-        if (this.options['upx']) this.options['upxs'] = this.options['upx'];
+        if (this.options['upx']) this.options['upx'] = this.options['upx'];
 
-        if ((key === 'upxs' || key === 'mock') && isUndef(optsVal)) {
+        if ((key === 'upx') && isUndef(optsVal)) {
           ret[key] = false
           return ret
         }
 
         if (key === 'external') {
-          ret[key] = Array.isArray(optsVal) ? optsVal : [optsVal]
+          if (typeof optsVal === 'function') {
+            ret[key] = optsVal;
+          } else {
+            ret[key] = Array.isArray(optsVal) ? optsVal : (isUndef(optsVal) ? [] : [optsVal])
+          }
         } else {
           ret[key] = isUndef(optsVal) ? defaultVal : (isObject(defaultVal) && isObject(optsVal) ? { ...defaultVal, ...optsVal } : optsVal);
         }
@@ -194,31 +160,31 @@ export class OptionsResolver {
   }
 
   /**
-  * @description 刷新并获取 plugin json 文件
+  * @description 刷新并获取 plugin.json 文件
   * @param configPath plugin.json 文件路径
-  * @returns {UpxsJSON} 插件的 upx 选项
+  * @returns {upxJSON} 插件的 upx 选项
   */
-  static refreshUpxsJSON(configPath?: string) {
+  static refreshUpxJSON(configPath?: string) {
     if (!configPath) throw new Error(`[uTools]: 必须指定 configFile❌`);
 
     const jsonFilePath = isAbsolute(configPath) ? configPath : resolvePath(cwd, configPath);
     try {
-      OptionsResolver.upxsData = JSON.parse(readFileSync(jsonFilePath, 'utf8'));
-    } catch {
-      throw new Error(`[uTools]: plugin.json 解析错误❌!`);
+      OptionsResolver.upxData = JSON.parse(readFileSync(jsonFilePath, 'utf8'));
+    } catch (e) {
+      throw new Error(`[uTools]: 分析 plugin.json 时发生错误❌!`, { cause: e });
     }
-    validatePluginJson(OptionsResolver.upxsData);
+    validatePluginJson(OptionsResolver.upxData);
 
     // plugin.json 所在目录
     const jsonFileDir = dirname(jsonFilePath)
-    const preloadEntryFile = resolvePath(jsonFileDir, normalizePath(OptionsResolver.upxsData.preload));
-    const logoFile = resolvePath(jsonFileDir, normalizePath(OptionsResolver.upxsData.logo));
+    const preloadEntryFile = resolvePath(jsonFileDir, normalizePath(OptionsResolver.upxData.preload));
+    const logoFile = resolvePath(jsonFileDir, normalizePath(OptionsResolver.upxData.logo));
     if (!existsSync(preloadEntryFile)) throw new Error(`[uTools]: ${preloadEntryFile} 不存在, 请检查是否存在❌!`);
     if (!existsSync(logoFile)) throw new Error(`[uTools]: ${logoFile} 不存在, 请检查是否存在❌!`);
 
-    OptionsResolver.upxsData.preload = preloadEntryFile
-    OptionsResolver.upxsData.logo = logoFile
-    return OptionsResolver.upxsData;
+    OptionsResolver.upxData.preload = preloadEntryFile
+    OptionsResolver.upxData.logo = logoFile
+    return OptionsResolver.upxData;
   }
 
 }
