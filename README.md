@@ -93,9 +93,9 @@ npx utools --dir utools-dir-name
 
 ### 默认支持部分可用 electron 模块
 
-直接使用 window.electron 即可。（记住：utools 只支持部分 electorn 模块功能！）
+直接使用 `window.electron` 即可。（记住：utools 只支持部分 electorn 模块功能！）
 
-```
+```ts
 export const hello = () => window.utools.showNotification("你好👋！")
 export const clearClipboard = () => window.electron.clipboard.clear()
 ```
