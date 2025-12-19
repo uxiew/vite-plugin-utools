@@ -26,7 +26,6 @@ export interface upxOptions {
 
 export interface Options {
   configFile: string;
-  noEmit?: boolean;
   watch?: boolean;
   /**
    * window 环境下的 preload 导出内容的挂载属性

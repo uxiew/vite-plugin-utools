@@ -11,11 +11,9 @@ Tailwind CSS v4 在 Electron 下 `.selection\:bg-blue-500\/30` 无法正常工�
 ## 解决方案
 ### 配置 Tailwind 降级
 Electron 19 对应的 Chrome 内核版本是 102，而 CSS 的现代颜色语法（如 `oklch`, relative color syntax 等）是 Chrome 111+ 甚至更晚才支持的。
-
+Electron 23 使用的是 Chromium 110。
 Electron 24 升级到了 Chromium 112，因此它完全包含 Chromium 111+ 的特性。
 
-Electron 23 使用的是 Chromium 110。
-Electron 24 使用的是 Chromium 112。
 如果你想原生支持 CSS Color Level 4（如 `oklch`, relative color syntax 等），你需要将 uTools（或项目依赖）的 Electron 版本至少升级到 24。
 
 如果只能停留在 Electron 19 (Chromium 102)，那我之前提到的配置 lightningcss 进行 CSS 降级是目前唯一的解决方案。

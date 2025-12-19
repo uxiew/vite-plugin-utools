@@ -100,16 +100,22 @@ export const hello = () => window.utools.showNotification("你好👋！")
 export const clearClipboard = () => window.electron.clipboard.clear()
 ```
 
-假设 preload 入口文件是`index.ts`，并且配置了 preload 的`name: 'demo'`
+假设 preload 入口文件是 `index.ts`，并且配置了 preload 的`name: 'demo'`
 
 ```js
 // index.ts
 import { readFileSync } from "fs";
 
-// 所有需要挂载到`window`上的函数或其他，都需要导出使用（记住：只能在入口文件中导出！）
+// 挂载到 `window[name]` 上
 export const hello = () => window.utools.showNotification("你好👋！");
 export const clearClipboard = () => window.electron.clipboard.clear();
 export const readPlugin = () => readFileSync("./plugin.json");
+
+// 成员会直接挂载到 `window` 下
+export default {
+  num:1,
+  func(){}
+}
 ```
 
 最终转换为`preload.js`：
@@ -170,25 +176,11 @@ dist/node_modules/@xmldom.js  122.16 kB │ gzip: 30.23 kB
 
 插件`plugin.json`文件路径
 
-## noEmit
-
-默认值：`undefined`
-
-如果当前项目属于 typescript 项目，或者 设置`emitTypes:true`会自动生成名为`preload.d.ts`的类型文件（相对于`configFile`中的`preload`路径）。
-
-基本上有两个作用：
-
-1. 自动配置 utools api 的类型声明
-2. 自动配置 electron 的类型声明
-3. 生成相应的 typescript 类型
-
-> 如果不生效，请尝试`preload.d.ts`的类型声明添加到`tsconfig.json`的`include`中，以便生效！
-
 ## external
 
 默认值：`electron`，而且 `electron` 总是会被排除掉。
 
-对于不想打包的包，可以先`external`排除掉，例如`external: ['tiktoken']`,，然后通过 [vite-plugin-static-copy](https://github.com/sapphi-red/vite-plugin-static-copy) 复制到目标目录。
+对于不想打包的包，或者无法打包的原生模块，可以先`external`排除掉，例如`external: ['tiktoken']`，然后通过 [vite-plugin-static-copy](https://github.com/sapphi-red/vite-plugin-static-copy) 复制它到目标目录。
 
 ## name
 
@@ -261,7 +253,6 @@ export default {
 }
 ```
 
-
 # Mock 功能
 
 插件提供了 Mock 功能，让你在浏览器开发环境中（`npm run dev`）无需打开 uTools 即可测试插件功能。
@@ -310,7 +301,7 @@ window.utools.dbStorage.setItem('test', 'data');
 - [x] 完整的 uTools API Mock 实现
 - [x] 智能 preload 分析和 Mock 生成
 - [x] 用户自定义 Mock 支持
-- [x] preload 自动 reload
+- [x] mock 时preload 自动 reload
 
 # 参考
 
