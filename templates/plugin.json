@@ -1,0 +1,20 @@
+{
+  "$schema": "../node_modules/@ver5/vite-plugin-utools/utools.schema.json",
+  "main": "index.html",
+  "logo": "logo.png",
+  "preload": "preload.ts",
+  "author": "___",
+  "homepage": "___",
+  "description": "uTools template 😄 created by @ver5/vite-plugin-utools",
+  "features": [
+    {
+      "code": "dev",
+      "explain": "plugin demo",
+      "cmds": [
+        "dev",
+        "upx",
+        "xxx"
+      ]
+    }
+  ]
+}
