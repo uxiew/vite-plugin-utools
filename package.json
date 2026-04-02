@@ -1,7 +1,7 @@
 {
   "name": "@ver5/vite-plugin-utools",
-  "version": "0.3.3",
-  "description": "Utools for Vite by ChandlerVer5",
+  "version": "0.4.0",
+  "description": "a better vite plugin for Utools",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -38,7 +38,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ChandlerVer5/-ver5-vite-plugin-utools.git"
+    "url": "git+https://github.com/uxiew/vite-plugin-utools.git"
   },
   "keywords": [
     "vite",
@@ -48,9 +48,9 @@
   "author": "chandlerver5",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/ChandlerVer5/-ver5-vite-plugin-utools/issues"
+    "url": "https://github.com/uxiew/vite-plugin-utools/issues"
   },
-  "homepage": "https://github.com/chandlerver5/vite-plugin-utools#readme",
+  "homepage": "https://github.com/uxiew/vite-plugin-utools#readme",
   "devDependencies": {
     "@types/babel__core": "^7.20.5",
     "@types/babel__generator": "^7.27.0",
