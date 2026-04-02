@@ -284,6 +284,8 @@ declare module "electron" {
 // --- utools.api.d.ts ---
 
 
+type Sharp = import('sharp').Sharp;
+type SharpOptions = import('sharp').SharpOptions;
 
 interface UtoolsAiModel {
   id: string;
