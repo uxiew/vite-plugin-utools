@@ -77,7 +77,7 @@ import utools from '@ver5/vite-plugin-utools'
 export default defineConfig({
   plugins: [
     vue(),
-    ...utools({
+    utools({
       configFile: './utools/plugin.json',
       name: 'preload',
     }),
@@ -86,7 +86,6 @@ export default defineConfig({
 ```
 
 注意：
-- 该插件默认导出的是 `Plugin[]`，所以推荐使用 `...utools(...)` 展开。
 - `configFile` 是唯一必填项。
 
 ### 3. 在 `tsconfig.json` 中启用类型
@@ -115,29 +114,6 @@ export default defineConfig({
 ```
 
 如果你的 `plugin.json` 不在项目根目录，而是在默认的 `utools/` 目录下，路径应当相对于该文件本身书写，因此模板默认使用 `../node_modules/...`。
-
-## `plugin.json` 的关键要求
-
-插件会读取并校验 `plugin.json`。至少要确保这些字段存在，或者能从 `package.json` 推导出来：
-
-```json
-{
-  "name": "demo",
-  "pluginName": "Demo",
-  "version": "0.0.1",
-  "description": "Demo plugin",
-  "author": "your-name",
-  "homepage": "https://example.com",
-  "logo": "./logo.png",
-  "main": "index.html",
-  "preload": "./preload.ts"
-}
-```
-
-注意：
-- `preload` 路径是相对于 `plugin.json` 所在目录解析的。
-- 构建后会被改写为输出目录内的 `preload.js`。
-- `logo` 也会解析成绝对路径并在构建时复制到产物目录中。
 
 ## `preload.ts` 的导出规则
 

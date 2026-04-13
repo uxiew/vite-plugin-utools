@@ -3,3 +3,6 @@ node_modules
 dist
 .ai_memory
 playground
+
+utools.d.ts
+utools.schema.json

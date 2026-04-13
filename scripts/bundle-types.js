@@ -4,7 +4,8 @@ const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const packageSpec = process.env.UTOOLS_API_TYPES_SPEC || 'utools-api-types@latest';
+const packageSpec =
+  process.env.UTOOLS_API_TYPES_SPEC || 'utools-api-types@latest';
 let cleanupDir = null;
 
 function resolveLocalPackageDir() {
@@ -35,7 +36,11 @@ function installTemporaryPackage(spec) {
 
   fs.writeFileSync(
     path.join(tempDir, 'package.json'),
-    JSON.stringify({ private: true, name: 'utools-api-types-fetcher' }, null, 2),
+    JSON.stringify(
+      { private: true, name: 'utools-api-types-fetcher' },
+      null,
+      2,
+    ),
   );
 
   execFileSync(
@@ -70,11 +75,17 @@ try {
     if (!fs.existsSync(filePath)) continue;
 
     let fileContent = fs.readFileSync(filePath, 'utf-8');
-    fileContent = fileContent.replace(/^\/\/\/ <reference path=".*"\/>\s*$/gm, '');
-    fileContent = fileContent.replace(/^import type {.*} from 'sharp';\s*$/gm, '');
-    fileContent = fileContent.replace(/: Sharp;/g, ": import('sharp').Sharp;");
-    fileContent = fileContent.replace(/: SharpOptions/g, ": import('sharp').SharpOptions");
-    fileContent = fileContent.replace(/=> Sharp;/g, "=> import('sharp').Sharp;");
+    fileContent = fileContent.replace(
+      /^\/\/\/ <reference path=".*"\/>\s*$/gm,
+      '',
+    );
+    fileContent = fileContent.replace(
+      /^import type {.*} from 'sharp';\s*$/gm,
+      '',
+    );
+    // fileContent = fileContent.replace(/: Sharp;/g, ": import('sharp').Sharp;");
+    // fileContent = fileContent.replace(/: SharpOptions/g, ": import('sharp').SharpOptions");
+    // fileContent = fileContent.replace(/=> Sharp;/g, "=> import('sharp').Sharp;");
 
     content += `\n// --- ${file} ---\n${fileContent}`;
   }
