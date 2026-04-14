@@ -154,11 +154,11 @@ window.version
 2. 根据 `preload.ts` 自动生成 mock 文件，方便你在浏览器里调试页面逻辑。
 
 默认会在 `preload.ts` 同级生成：
-- `_mock.auto.d.ts`
+- `_mock.auto.ts`
 - `preload.mock.ts`
 
 用途分别是：
-- `_mock.auto.d.ts`：根据当前 `preload.ts` 自动生成的类型与默认 mock 内容。
+- `_mock.auto.ts`：根据当前 `preload.ts` 自动生成的类型与默认 mock 内容。
 - `preload.mock.ts`：给你覆盖默认 mock 行为的用户文件；首次生成后不会被覆盖。
 
 当 `preload.ts` 更新时，自动 mock 文件会同步刷新，并触发页面全量重载。
@@ -432,7 +432,7 @@ import { MockUToolsApi } from '@ver5/vite-plugin-utools/utoolsMock'
 
 这样页面层访问会比较清晰。
 
-### 3. 为什么开发态会生成 `_mock.auto.d.ts` 和 `preload.mock.ts`？
+### 3. 为什么开发态会生成 `_mock.auto.ts` 和 `preload.mock.ts`？
 
 因为 mock 体系是围绕 `preload.ts` 自动推导的。这样页面开发时既有真实接口形状，又能快速改写返回值。
 
