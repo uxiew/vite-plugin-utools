@@ -203,6 +203,82 @@ function preloadPlugin(options: RequiredOptions): Plugin {
                 scode.replaceAll(declarationRegex, '');
 
                 if (exportNames?.length > 0) {
+                    // 检查每个 exportName 在 purge 后的代码中是否有对应的变量声明。
+                    // 对于 namespace re-export (`export * as ns from '...'`)，
+                    // Rolldown 可能将内容放到其他 chunk 中，preload chunk 中
+                    // 不会生成 `exports.ns = ...` 语句，导致 purge 后缺少变量绑定。
+                    const finalCode = scode.toString();
+                    const missingExports: string[] = [];
+
+                    for (const k of exportNames) {
+                        const localName = exportMap[k] || k;
+                        // 检查代码中是否存在变量声明（const/let/var/function）或者 require 赋值
+                        const declPattern = new RegExp(
+                            `(?:^|[\\s;])(?:const|let|var|function)\\s+${escapeRegexStr(localName)}\\b`,
+                            'm'
+                        );
+                        if (!declPattern.test(finalCode)) {
+                            missingExports.push(k);
+                        }
+                    }
+
+                    // 对于缺失的 export，尝试从其他 chunk 中找到对应的绑定
+                    if (missingExports.length > 0) {
+                        for (const missingName of missingExports) {
+                            let resolved = false;
+                            // 遍历 bundle 中的其他 chunk，查找导出了该名称（或其变体）的 chunk
+                            // 注意：必须跳过 preload 自身（delete bundle[PRELOAD_FILENAME] 在异步回调前执行，
+                            // 但 bundle 对象可能被 Rolldown/Vite 恢复）
+                            for (const fileName in bundle) {
+                                if (fileName === PRELOAD_FILENAME) continue;
+                                const chunk = bundle[fileName];
+                                if (chunk.type !== 'chunk') continue;
+
+                                // Rolldown 的 namespace re-export 可能使用 `${name}_exports` 作为内部名称
+                                const candidates = [missingName, `${missingName}_exports`];
+                                for (const candidate of candidates) {
+                                    if (chunk.exports?.includes(candidate)) {
+                                        // 找到了——生成 require 语句从该 chunk 获取
+                                        const requirePath = `./${fileName}`;
+                                        const requireVar = `__require_${missingName}`;
+                                        scode.append(`\nconst ${requireVar} = require(${JSON.stringify(requirePath)});`);
+                                        scode.append(`\nconst ${missingName} = ${requireVar}.${candidate};`);
+                                        resolved = true;
+                                        break;
+                                    }
+                                }
+                                if (resolved) break;
+                            }
+
+                            if (!resolved) {
+                                // 兜底：在其他 chunk 中通过代码内容搜索
+                                for (const fileName in bundle) {
+                                    if (fileName === PRELOAD_FILENAME) continue;
+                                    const chunk = bundle[fileName];
+                                    if (chunk.type !== 'chunk') continue;
+                                    // 查找 Object.defineProperty(exports, "xxx_exports", ...) 模式
+                                    const definePattern = new RegExp(
+                                        `Object\\.defineProperty\\(exports,\\s*["']${escapeRegexStr(missingName)}_exports["']`
+                                    );
+                                    if (definePattern.test(chunk.code)) {
+                                        const requirePath = `./${fileName}`;
+                                        const requireVar = `__require_${missingName}`;
+                                        scode.append(`\nconst ${requireVar} = require(${JSON.stringify(requirePath)});`);
+                                        scode.append(`\nconst ${missingName} = ${requireVar}.${missingName}_exports;`);
+                                        resolved = true;
+                                        break;
+                                    }
+                                }
+                            }
+
+                            if (!resolved) {
+                                // 最终兜底：声明为空对象，避免 ReferenceError
+                                console.warn(`[uTools Preload] Warning: export "${missingName}" has no corresponding declaration, defaulting to empty object.`);
+                                scode.append(`\nconst ${missingName} = {};`);
+                            }
+                        }
+                    }
+
                     const exportsString = exportNames.map(k => {
                         const localName = exportMap[k] || k;
                         return k === localName ? k : `${k}: ${localName}`;

@@ -185,11 +185,11 @@ pnpm vite
 
 开发模式下插件会：
 - 启动 Vite 页面。
-- 同时构建 `preload.js`。
+- 同时构建 `[输出目录]/preload.js`。
 - 将当前 dev server 地址写入生成后的 `plugin.json`。
 - 在 `plugin.json` 或原始配置文件变化时重新刷新输出。
 
-然后你只需要在 uTools 开发者工具中指向输出目录内的 `plugin.json` 即可。
+然后你只需要在 uTools 开发者工具中指向**输出目录**内的 `plugin.json` 即可。
 
 ### 生产构建
 
@@ -200,7 +200,7 @@ pnpm vite build
 生产模式会：
 - 构建你的 Vite 页面产物。
 - 构建 `preload.js`。
-- 生成最终的 `dist/plugin.json`。
+- 生成最终的 `[输出目录]/plugin.json`。
 - 如果配置了 `upx`，继续打出 `.upx` 文件。
 
 ### 包自身构建与发布校验
@@ -348,10 +348,19 @@ utools({
 
 ### `upx`
 
-类型：`{ outDir?: string; outName?: string } | null`  
+类型：`boolean | { outDir?: string; outName?: string } | null`  
 默认值：开发者未配置时视为关闭
 
 用于在生产构建后打出 `.upx` 文件。
+
+```ts
+utools({
+  configFile: './utools/plugin.json',
+  upx: true,
+})
+```
+
+如需自定义输出位置或文件名：
 
 ```ts
 utools({
@@ -364,7 +373,8 @@ utools({
 ```
 
 说明：
-- `outDir` 默认是 `dist`。
+- `upx: true` 会按默认值直接打包，无需额外“启用”配置。
+- `outDir` 默认与当前 Vite 的 `build.outDir` 一致，只有显式传入时才覆盖。
 - `outName` 默认是 `[pluginName]_[version].upx`。
 - 目前适合普通 upx 构建，不适用于加密版 upxs。
 

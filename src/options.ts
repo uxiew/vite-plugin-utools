@@ -1,15 +1,9 @@
 import type MagicString from 'magic-string';
-import { normalizePath, InlineConfig, RollupCommonJSOptions } from 'vite';
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  resolve,
-  resolve as resolvePath,
-} from 'node:path';
-import { readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { normalizePath, InlineConfig } from 'vite';
+import { basename, dirname, isAbsolute, resolve, resolve as resolvePath } from 'node:path';
+import { readFileSync, existsSync } from 'node:fs';
 import { cwd, Data, isObject, isUndef } from './utils';
-import { loadPkg, validatePluginJson } from './prepare';
+import { validatePluginJson } from './prepare';
 import { RollupOptions } from 'rollup';
 
 export interface upxJSON {
@@ -29,6 +23,10 @@ export interface upxOptions {
   outDir?: string;
   outName?: string;
 }
+
+export const DEFAULT_UPX_OPTIONS: upxOptions = {
+  outName: '[pluginName]_[version].upx',
+};
 
 export interface Options {
   /**
@@ -62,10 +60,15 @@ export interface Options {
   /** 预加载文件的全局变量 */
   define?: InlineConfig['define'];
   /**
-   * @deprecated 生成 upx 插件，不设置则不生成
-   * @default { outDir: 'dist', outName: '[pluginName]_[version].upx' }
+   * 生成 upx 插件。
+   * - `true`：使用默认配置
+   * - `false | null | undefined`：不生成
+   * - `object`：合并自定义配置
+   *
+   * 默认输出到当前 Vite 的 `build.outDir`，除非显式传入 `outDir`。
+   * @default false
    */
-  upx?: upxOptions | null;
+  upx?: boolean | upxOptions | null;
   /**
    * 是否启用 mock
    */
@@ -149,10 +152,7 @@ export class OptionsResolver {
       showBadge: true,
     },
     vconsole: false,
-    upx: {
-      outDir: 'dist',
-      outName: '[pluginName]_[version].upx',
-    },
+    upx: DEFAULT_UPX_OPTIONS,
   };
 
   static resolvedOptions: RequiredOptions;
@@ -179,6 +179,29 @@ export class OptionsResolver {
     return OptionsResolver.upxData.preload;
   }
 
+  /**
+   * 归一化 upx 选项。
+   * @param userVal 用户传入的 upx 配置
+   * @param defaultVal 默认 upx 配置
+   * @returns 归一化后的 upx 配置，未启用时返回 false
+   */
+  private resolveUpxOptions(
+    userVal: Options['upx'],
+    defaultVal: Options['upx'],
+  ) {
+    if (isUndef(userVal) || userVal === false || userVal === null) {
+      return false;
+    }
+
+    if (userVal === true) {
+      return { ...(defaultVal as upxOptions) };
+    }
+
+    return isObject(defaultVal) && isObject(userVal)
+      ? { ...defaultVal, ...userVal }
+      : userVal;
+  }
+
   private resolve(options: Options) {
     const defaultOptions = this.defaultOptions;
 
@@ -193,9 +216,8 @@ export class OptionsResolver {
       // @ts-ignore
       const defaultVal = defaultOptions[key];
 
-      // 保持原有的 upx 特殊处理逻辑：如果用户未配置 upx，则默认为 false (禁用)
-      if (key === 'upx' && isUndef(userVal)) {
-        ret[key] = false;
+      if (key === 'upx') {
+        ret[key] = this.resolveUpxOptions(userVal, defaultVal);
         return ret;
       }
 

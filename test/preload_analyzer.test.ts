@@ -623,6 +623,33 @@ export const testObject = {
             expect(result).not.toContain('const fs = fs$1;'); // 确保没有生成冲突的代码
             expect(exportMap).toHaveProperty('fs', '_up_fs');
         });
+
+        it('namespace re-export 在 Rolldown 中不生成 exports.xxx 语句时应正确处理', () => {
+            // 模拟 Rolldown 的 CJS 输出：namespace re-export (export * as otp from './otp')
+            // 被拆到其他 chunk 中，preload chunk 中完全没有 exports.otp = ... 语句
+            const code = `
+            "use strict";
+            const require_lib = require("./node_modules/lib.js");
+            var getKeyIv = (passphrase) => { return {}; };
+            function encryptValue(keyiv, data) { return ""; }
+            exports.getKeyIv = getKeyIv;
+            exports.encryptValue = encryptValue;
+            `;
+
+            const { code: result, exportMap } = purgePreloadbundle(code);
+
+            // getKeyIv 和 encryptValue 应该被 purge 正确处理
+            // 但 'otp' 这个 exportName（来自 chunk.exports）在代码中根本不存在
+            // purgePreloadbundle 只处理代码中存在的 exports.xxx 语句
+            // 所以 exportMap 中不会有 'otp'
+
+            expect(result).not.toContain('exports.getKeyIv');
+            expect(result).not.toContain('exports.encryptValue');
+            expect(exportMap).not.toHaveProperty('otp');
+            // 确认原始变量声明保留
+            expect(result).toContain('var getKeyIv');
+            expect(result).toContain('function encryptValue');
+        });
     });
 
     describe('fillPreloadTsd', () => {
