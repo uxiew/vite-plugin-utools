@@ -34,7 +34,7 @@
     "dev": "pnpm run build -- --watch",
     "test": "vitest run",
     "verify": "pnpm test && pnpm build",
-    "release": "pnpm verify && bumpp --commit --tag --push && pnpm publish"
+    "release": "pnpm verify && bumpp --commit --tag --push"
   },
   "repository": {
     "type": "git",
