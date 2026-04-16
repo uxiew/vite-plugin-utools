@@ -1,6 +1,6 @@
 {
   "name": "@ver5/vite-plugin-utools",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "description": "a better vite plugin for Utools",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
