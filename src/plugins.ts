@@ -85,6 +85,7 @@ export const devPlugin = (options: RequiredOptions): Plugin => {
  */
 export const buildPlugin = (options: RequiredOptions): Plugin => {
   let config: ResolvedConfig;
+  let preloadBuildPromise: Promise<void> | undefined;
 
   return {
     name: 'vite:@ver5/utools-bundle',
@@ -100,9 +101,14 @@ export const buildPlugin = (options: RequiredOptions): Plugin => {
         // The preload build was defaulting to watch: true (from options.preload.watch), which caused Vite/Rollup to stay in watch mode even during a production build.
         watch: false,
       };
-      buildPreload(buildOptions);
+      // 保留 Promise 引用，在 closeBundle 中等待完成
+      preloadBuildPromise = buildPreload(buildOptions);
     },
     closeBundle: async () => {
+      // 等待 preload 构建完成（包括 preload.js 和 node_modules/*.js 写入 dist）
+      if (preloadBuildPromise) {
+        await preloadBuildPromise;
+      }
       prepareUpxFiles(config);
       if (!options.configFile || !options.upx) return;
       await buildUpx(
